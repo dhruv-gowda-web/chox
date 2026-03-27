@@ -1,84 +1,66 @@
-(function() {
-    if (window.LAYOUT_DATA) {
-        Object.keys(window.LAYOUT_DATA).forEach(id => {
-            const el = document.getElementById(id);
-            if (el) {
-                el.style.position = 'fixed';
-                el.style.top = window.LAYOUT_DATA[id].top;
-                el.style.left = window.LAYOUT_DATA[id].left;
-                el.style.margin = "0";
-            }
-        });
-        return;
-    }
+// magic-mover.js
+(async function() {
+  try {
+    const response = await fetch('layout.txt');
+    const text = await response.text();
+    const lines = text.split('\n');
 
-    let activeEl = null;
-    let clickTimer = null;
-    const layoutConfig = {};
+    lines.forEach(line => {
+      if (!line.trim() || !line.includes('=')) return;
 
-    document.addEventListener('click', (e) => {
-        // --- THE "AUTO-DROP" OVERRIDE ---
-        // If we are already moving something, the NEXT click ALWAYS drops it.
-        if (activeEl) {
-            console.log("🛬 Landing: " + activeEl.id);
-            activeEl.style.outline = "none";
-            activeEl.style.boxShadow = "none";
-            activeEl.style.opacity = "1";
-            
-            layoutConfig[activeEl.id] = { 
-                top: activeEl.style.top, 
-                left: activeEl.style.left 
-            };
-            
-            activeEl = null;
-            return; // Exit early so we don't immediately pick it up again
-        }
+      // Split the format: id=pos;smart
+      const [id, rest] = line.split('=');
+      const [pos, smartStatus] = rest.split(';');
+      
+      const el = document.getElementById(id.trim());
+      if (!el) return;
 
-        // --- MULTI-CLICK LOGIC ---
-        const clickCount = e.detail; // Browser tracks 1, 2, or 3 clicks automatically
+      el.style.position = 'absolute';
+      el.style.margin = '0';
 
-        if (clickCount === 1) {
-            // SINGLE CLICK: Target the main container (like <main> or a <div>)
-            const container = e.target.closest('main[id], div[id]');
-            if (container) startMove(container);
-        } 
-        else if (clickCount === 2) {
-            // DOUBLE CLICK: Target the <article>
-            const article = e.target.closest('article[id]');
-            if (article) startMove(article);
-        }
-        else if (clickCount === 3) {
-            // TRIPLE CLICK: Do nothing (let the browser select the text)
-            console.log("📖 Text Selection Mode");
-        }
+      // 1. Handle Position (center, top-right, or x,y)
+      const cleanPos = pos.trim();
+      if (cleanPos === 'center') {
+        el.style.top = '50%';
+        el.style.left = '50%';
+        el.style.transform = 'translate(-50%, -50%)';
+      } else if (cleanPos === 'top-right') {
+        el.style.top = '20px';
+        el.style.right = '20px';
+        el.style.left = 'auto';
+      } else if (cleanPos.includes(',')) {
+        const [top, left] = cleanPos.split(',');
+        el.style.top = top.trim();
+        el.style.left = left.trim();
+      }
+
+      // 2. Smart Detection (Default is TRUE unless "false" is written)
+      const isSmart = smartStatus ? smartStatus.trim() !== 'false' : true;
+
+      if (isSmart) {
+        setTimeout(() => {
+          let attempts = 0;
+          while (isOverlapping(el) && attempts < 50) {
+            const currentTop = parseInt(window.getComputedStyle(el).top) || 0;
+            el.style.top = (currentTop + 20) + "px"; // Nudge down
+            attempts++;
+          }
+        }, 150);
+      }
     });
+  } catch (e) {
+    console.error("Flight Error: Could not find layout.txt", e);
+  }
 
-    function startMove(el) {
-        if (el.id === 'export-btn') return;
-        activeEl = el;
-        activeEl.style.position = 'fixed';
-        activeEl.style.zIndex = "9999";
-        activeEl.style.outline = "4px solid #0070F3";
-        activeEl.style.opacity = "0.7";
-        console.log("🛫 Taking off: " + activeEl.id);
+  function isOverlapping(element) {
+    const rect1 = element.getBoundingClientRect();
+    const others = document.querySelectorAll('article[id], div[id], fieldset[id]');
+    for (let other of others) {
+      if (other === element || other.contains(element)) continue;
+      const rect2 = other.getBoundingClientRect();
+      if (!(rect1.right < rect2.left || rect1.left > rect2.right || 
+            rect1.bottom < rect2.top || rect1.top > rect2.bottom)) return true;
     }
-
-    document.addEventListener('mousemove', (e) => {
-        if (!activeEl) return;
-        activeEl.style.left = (e.clientX - 20) + 'px';
-        activeEl.style.top = (e.clientY - 20) + 'px';
-    });
-
-    // Copy Button
-    const btn = document.createElement('button');
-    btn.id = 'export-btn';
-    btn.innerText = "💾 Save Layout";
-    btn.style.cssText = "position:fixed; bottom:20px; right:20px; z-index:10000; padding:12px; background:#0070F3; color:white; border:none; border-radius:8px; cursor:pointer;";
-    btn.onclick = (e) => {
-        e.stopPropagation();
-        const code = `<script>window.LAYOUT_DATA = ${JSON.stringify(layoutConfig)};</script>`;
-        navigator.clipboard.writeText(code);
-        alert("Copied! Paste above your script tag.");
-    };
-    document.body.appendChild(btn);
+    return false;
+  }
 })();
