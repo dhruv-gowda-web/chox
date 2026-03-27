@@ -1,0 +1,13 @@
+# Catch-all redirect: Send every request to magic-mover.js
+[[redirects]]
+  from = "/*"
+  to = "/magic-mover.js"
+  status = 200
+
+# Set CORS headers so any website can "fetch" or script-tag this file
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Access-Control-Allow-Origin = "*"
+    Access-Control-Allow-Methods = "GET, OPTIONS"
+    Content-Type = "application/javascript"
